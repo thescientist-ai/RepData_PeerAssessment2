@@ -1,0 +1,123 @@
+---
+title: "**Exploring the NOAA Storm Database**"
+author: "**David Bryan Lao**"
+date: "**September 01, 2020**"
+output: html_document
+---
+
+## **Synopsis**
+
+In this work, we explored the NOAA Storm Database.  We looked into the most harmful and the most economically-consequential events.  For the most harmful, we did this by looking at events that have both mean injuries and mean fatalities above the third quartile for each respective variable, simultaneously.  We did a similar analysis for the most economically-consequential events, but with the following quantities as basis: mean property damage and mean crop damage.  The result shows that the topmost harmful and the topmost economically-consequential event is `Tropical Storm Gordon`.
+
+## **Data Processing**
+
+```{r library, message = FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+We begin this analysis by first reading in the data.  We do this by reading in the CSV file into the variable `data`:
+
+```{r read-data, cache=TRUE}
+data <- read.csv("repdata_data_StormData.csv.bz2")
+```
+
+Now, let's explore `data`.  We start by taking the `head()` of the `data`:
+
+```{r head-data}
+head(data)
+```
+
+The dimension of `data` obtained by `dim()` is:
+
+```{r dim-data}
+dim(data)
+```
+
+And finally, we get a nice little summary of `data`:
+
+```{r summary-data}
+summary(data)
+```
+
+### **Question One**
+
+Now, our first task is to answer the following question: Across the United States, which types of events (as indicated in the `EVTYPE` variable) are most harmful with respect to population health?
+
+To do this, we create a data frame `events` with only the following columns: `INJURIES`, `FATALITIES`, and `EVTYPE`.
+
+```{r select-columns} 
+events <- data %>% select('INJURIES', 'FATALITIES', 'EVTYPE')
+```
+
+Next, we aggregate `events` by `EVTYPE` with the `mean()` function:
+
+```{r aggregate}
+events_agg <- aggregate(events[, 1:2], by = list(events$EVTYPE), FUN = mean)
+names(events_agg)[names(events_agg) == "Group.1"] <- "EVTYPE"
+```
+
+Now, you may be thinking why I took the mean instead of the sum.  It would be natural to just find the event with the most number of injuries or fatalities, right?  That might be true.  But in my analysis here, I took the mean because I wanted to find out which events are most destructive **on average**.  For example, say that we have `1000` typhoons in a year with `20` deaths per typhoon.  Meanwhile, we have `100` tornados in a year with `50` deaths per tornado.  While it is valid to take the total deaths as basis (`20000` for typhoons and `5000` for tornados), it would also be equally valid to take the average deaths (`20` for typhoons and `50` for tornados) and use  that as basis for comparing their harmfulness.  It all depends on how you view harmfulness, is it its cumulative effect or is it its average effect?  For the former, you are looking at how harmful it is based on its effects over the years while for the latter, you are looking how harmful it is on average.  This argument is carried over to Question Two, as well.
+
+For now, we obtain the harmful events.  To achieve this, we disregard event types that have both zero mean injuries and zero mean fatalities:
+
+```{r harmful}
+harmful <- events_agg %>% filter(INJURIES != 0 & FATALITIES != 0)
+```
+
+To find the most harmful events, we take the upper `25` percent of the mean injuries column and the upper `25` percent of the mean fatalities column from our `harmful` data frame via an `AND` logical operator (this means that we are only counting high mean injuries and high mean fatalities events as most harmful):
+
+```{r most-harmful}
+most_harmful <- harmful %>% filter(INJURIES >= quantile(INJURIES, 0.75) & FATALITIES >= quantile(FATALITIES, 0.75))
+```
+
+### **Question Two**
+
+Our second task is to answer the following question: Across the United States, which types of events have the greatest economic consequences?
+
+To do this, we create a data frame `damages` with only the following columns: `PROPDMG`, `CROPDMG`, and `EVTYPE`.  Note that our analysis here will be similar to the one we did in Question One.
+
+```{r select-columns-2} 
+damages <- data %>% select('PROPDMG', 'CROPDMG', 'EVTYPE')
+```
+
+We aggregate `damages` by `EVTYPE` with the `mean()` function:
+
+```{r aggregate2}
+damages_agg <- aggregate(damages[, 1:2], by = list(events$EVTYPE), FUN = mean)
+names(damages_agg)[names(damages_agg) == "Group.1"] <- "EVTYPE"
+```
+
+Since we are obtaining the consequential events, we will disregard event types that have both zero mean property damages and zero mean crop damages:
+
+```{r consequential}
+consequential <- damages_agg %>% filter(PROPDMG != 0 & CROPDMG != 0)
+```
+
+To find the most consequential events, we take the upper `25` percent of the mean property damage column and the upper `25` percent of the mean crop damage column from our `consequential` data via an `AND` logical operator (this means that we are only counting high mean property damage and high mean crop damage events as most consequential):
+
+```{r most-consequential}
+most_consequential <- consequential %>% filter(PROPDMG >= quantile(PROPDMG, 0.75) & CROPDMG >= quantile(CROPDMG, 0.75))
+```
+
+## **Results**
+
+### **Question One**
+
+We now plot our `most harmful` data frame with `log(MEAN INJURIES)` in the horizontal axis and `log(MEAN FATALITIES)` in the vertical axis:
+
+```{r most-harmful-plot}
+ggplot(most_harmful, aes(log(INJURIES), log(FATALITIES), color = EVTYPE)) + geom_point(size = 5) + labs(x = 'log(MEAN INJURIES)', y = 'log(MEAN FATALITIES)')
+```
+
+This plot shows our most harmful events with `Tropical Storm Gordon`, on the upper right, taking the top of the list.  
+
+### **Question Two**
+
+We now plot our `most consequential` data frame with `log(MEAN PROPDMG)` in the horizontal axis and `log(MEAN CROPDMG)` in the vertical axis:
+
+```{r most-consequential-plot}
+ggplot(most_consequential, aes(log(PROPDMG), log(CROPDMG), color = EVTYPE)) + geom_point(size = 5) + labs(x = 'log(MEAN PROPDMG)', y = 'log(MEAN CROPDMG)')
+```
+
+This plot shows our most economically-consequential events with, again, `Tropical Storm Gordon`, on the upper right, taking the top of the list.
